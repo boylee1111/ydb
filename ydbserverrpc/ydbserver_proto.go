@@ -4,19 +4,23 @@ package ydbserverrpc
 type Status int
 
 const (
-	OK            Status = iota + 1 // The RPC was a success.
-	TableNotFound                   // The specified table does not exist.
-	WrongServer                     // The specified table does not fall in the server's hash range.
-	NotReady                        // The servers are still getting ready.
+	OK               Status = iota + 1 // The RPC was a success.
+	TableExist                         // The specified table exist already.
+	TableNotFound                      // The specified table does not exist.
+	TableOpenByOther                   // Table opened by others
+	WrongServer                        // The specified table does not fall in the server's hash range.
+	NotReady                           // The servers are still getting ready.
 )
 
 type TableHandle struct {
 	TableName      string
-	ColumnFamilies map[string][]string // family -> qualifiers
+	ColumnFamilies map[string]string
 }
 
 type CreateTableArgs struct {
-	TableName string
+	TableName      string
+	ColumnFamilies map[string]string
+	MemTableLimit  int
 }
 
 type CreateTableReply struct {
@@ -52,7 +56,7 @@ type DestroyTableReply struct {
 type PutRowArgs struct {
 	TableName      string
 	RowKey         string
-	UpdatedColumns map[string]map[string]string
+	UpdatedColumns map[string]map[string]string // TODO: 怎么改
 }
 
 type PutRowReply struct {
@@ -92,6 +96,7 @@ type GetColumnByRowReply struct {
 }
 
 type MemTableLimitArgs struct {
+	TableName    string
 	NewLimitRows int
 }
 
