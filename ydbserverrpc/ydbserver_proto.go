@@ -13,7 +13,26 @@ const (
 type CreateTableArgs struct {
 	TableName string
 }
+
 type CreateTableReply struct {
+	// TODO: Table handle?
+	Status Status
+}
+
+type OpenTableArgs struct {
+	TableName string
+}
+
+type OpenTableReply struct {
+	// TODO: Table handle
+	Status Status
+}
+
+type CloseTableArgs struct {
+	// TODO: Table handle
+}
+
+type CloseTableReply struct {
 	Status Status
 }
 

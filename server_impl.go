@@ -26,11 +26,11 @@ type ydbServer struct {
 }
 
 type ydbTable struct {
-	columsFamilies map[string][]string  // Column familty to qualifier
-	data           map[string]ydbColumn // Row Key -> column
-	size           int                  // Table size
-	inOpen         bool                 // Table in open
-	creationTime   time.Time            // Table create time
+	columnsFamilies map[string][]string  // Column family to qualifier
+	data            map[string]ydbColumn // Row Key -> column
+	size            int                  // Table size
+	inOpen          bool                 // Table in open
+	creationTime    time.Time            // Table create time
 }
 
 type ydbColumn struct {
@@ -61,6 +61,14 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 
 func (ydb *ydbServer) CreateTable(args *ydbserverrpc.CreateTableArgs, reply *ydbserverrpc.CreateTableReply) error {
 	fmt.Println("Create Table: ", args.TableName)
+	return nil
+}
+
+func (ydb *ydbServer) OpenTable(args *ydbserverrpc.OpenTableArgs, reply *ydbserverrpc.OpenTableReply) error {
+	return nil
+}
+
+func (ydb *ydbServer) CloseTable(args *ydbserverrpc.CloseTableArgs, reply *ydbserverrpc.CloseTableReply) error {
 	return nil
 }
 
