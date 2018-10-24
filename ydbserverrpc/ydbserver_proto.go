@@ -4,19 +4,24 @@ package ydbserverrpc
 type Status int
 
 const (
-	OK          Status = iota + 1 // The RPC was a success.
-	KeyNotFound                   // The specified key does not exist.
-	WrongServer                   // The specified key does not fall in the server's hash range.
-	NotReady                      // The storage servers are still getting ready.
+	OK            Status = iota + 1 // The RPC was a success.
+	TableNotFound                   // The specified table does not exist.
+	WrongServer                     // The specified table does not fall in the server's hash range.
+	NotReady                        // The servers are still getting ready.
 )
+
+type TableHandle struct {
+	TableName      string
+	ColumnFamilies map[string][]string // family -> qualifiers
+}
 
 type CreateTableArgs struct {
 	TableName string
 }
 
 type CreateTableReply struct {
-	// TODO: Table handle?
-	Status Status
+	TableHandle TableHandle
+	Status      Status
 }
 
 type OpenTableArgs struct {
@@ -24,12 +29,12 @@ type OpenTableArgs struct {
 }
 
 type OpenTableReply struct {
-	// TODO: Table handle
-	Status Status
+	TableHandle TableHandle
+	Status      Status
 }
 
 type CloseTableArgs struct {
-	// TODO: Table handle
+	TableName string
 }
 
 type CloseTableReply struct {

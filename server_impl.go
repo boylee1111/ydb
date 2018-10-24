@@ -26,7 +26,7 @@ type ydbServer struct {
 }
 
 type ydbTable struct {
-	columnsFamilies map[string][]string  // Column family to qualifier
+	columnsFamilies map[string][]string  // Column family to qualifiers
 	data            map[string]ydbColumn // Row Key -> column
 	size            int                  // Table size
 	inOpen          bool                 // Table in open
