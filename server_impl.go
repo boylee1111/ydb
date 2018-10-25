@@ -33,24 +33,6 @@ type serverMeta struct {
 	tableNames []string
 }
 
-type tableMeta struct {
-	tableName       string    // Table name
-	columnsFamilies []string  // Column family
-	memTableLimit   int       // Max limit rows for table in memory
-	creationTime    time.Time // Table create time
-}
-
-type ydbTable struct {
-	metadata   tableMeta
-	data       map[string]ydbColumn // Row Key -> column data
-	dataLocker *sync.RWMutex        // Mutex for data store
-	//inOpen     bool                 // Is opened
-}
-
-type ydbColumn struct {
-	columns map[string]string // Key is column family:qualifier, val is value
-}
-
 func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32) (YDBServer, error) {
 	portStr := ":" + strconv.Itoa(port)
 	listener, err := net.Listen(defaultConnectionType, portStr)
@@ -58,6 +40,8 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 		fmt.Println("Failed on Listen: ", err)
 		return nil, err
 	}
+
+	db, err := bbolt.Open("index_db", 0666, nil)
 
 	ydb := &ydbServer{
 		tables:   make(map[string]*ydbTable),
@@ -90,12 +74,12 @@ func (ydb *ydbServer) CreateTable(args *ydbserverrpc.CreateTableArgs, reply *ydb
 			creationTime:    time.Now(),
 		},
 	}
-	ydb.tables[newTable.meta.tableName] = newTable
+	ydb.tables[newTable.metadata.tableName] = newTable
 
 	reply.Status = ydbserverrpc.OK
 	reply.TableHandle = ydbserverrpc.TableHandle{
-		TableName:      newTable.meta.tableName,
-		ColumnFamilies: newTable.meta.columnsFamilies,
+		TableName:      newTable.metadata.tableName,
+		ColumnFamilies: newTable.metadata.columnsFamilies,
 	}
 
 	return nil
