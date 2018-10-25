@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/boylee1111/ydb/ydbserverrpc"
+	"go.etcd.io/bbolt"
 )
 
 const (
@@ -18,24 +19,33 @@ const (
 	ydbServerRPCServerName = "YDBServer" // RPC name
 )
 
+type serverMeta struct {
+	tables [string]
+}
+
 type ydbServer struct {
+	meta serverMeta
 	tables   map[string]*ydbTable // Table name -> table
 	nodeID   uint32               // Store current node ID
 	isMaster bool                 // Specify whether current node is master
 	listener net.Listener         // Node listener
 	hostPort string               // Node host and port string
+	indexDB  *bbolt.DB
+}
+
+type tableMeta struct {
+	tableName       string            // Table name
+	columnsFamilies map[string]string // Column family
+	memTableLimit   int               // Max limit rows for table in memory
+	creationTime    time.Time         // Table create time
 }
 
 type ydbTable struct {
-	tableName       string               // Table name
-	columnsFamilies map[string]string    // Column family
-	memTableLimit   int                  // Max limit rows for table in memory
-	data            map[string]ydbColumn // Row Key -> column
-	dataLocker      *sync.RWMutex        // Mutex for data store
-	inOpen          bool                 // Is opened
-	creationTime    time.Time            // Table create time
+	meta       tableMeta
+	data       map[string]ydbColumn // Row Key -> column
+	dataLocker *sync.RWMutex        // Mutex for data store
+	inOpen     bool                 // Is opened
 
-	//rowLocker       map[string]*sync.RWMutex        // Mutex for every row
 }
 
 type ydbColumn struct {
@@ -56,6 +66,7 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 		isMaster: masterServerHostPort == "",
 		listener: listener,
 		hostPort: defaultHostname + portStr,
+		indexDB:  db,
 	}
 	rpc.RegisterName(ydbServerRPCServerName, ydbserverrpc.Wrap(ydb))
 	rpc.HandleHTTP()
