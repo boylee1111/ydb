@@ -14,12 +14,12 @@ const (
 
 type TableHandle struct {
 	TableName      string
-	ColumnFamilies map[string]string
+	ColumnFamilies []string
 }
 
 type CreateTableArgs struct {
 	TableName      string
-	ColumnFamilies map[string]string
+	ColumnFamilies []string
 	MemTableLimit  int
 }
 
@@ -56,7 +56,7 @@ type DestroyTableReply struct {
 type PutRowArgs struct {
 	TableName      string
 	RowKey         string
-	UpdatedColumns map[string]map[string]string // TODO: 怎么改
+	UpdatedColumns map[string]string // Key is family:qualifier, val is value
 }
 
 type PutRowReply struct {
@@ -70,7 +70,7 @@ type GetRowArgs struct {
 
 type GetRowReply struct {
 	Status Status
-	Rows   string // TODO: 用啥结构？
+	Row    string
 }
 
 type GetRowsArgs struct {
@@ -81,7 +81,7 @@ type GetRowsArgs struct {
 
 type GetRowsReply struct {
 	Status Status
-	Rows   string // TODO: 用啥结构？
+	Rows   map[string]string
 }
 
 type GetColumnByRowArgs struct {

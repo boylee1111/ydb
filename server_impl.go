@@ -19,12 +19,8 @@ const (
 	ydbServerRPCServerName = "YDBServer" // RPC name
 )
 
-type serverMeta struct {
-	tables [string]
-}
-
 type ydbServer struct {
-	meta serverMeta
+	meta     serverMeta
 	tables   map[string]*ydbTable // Table name -> table
 	nodeID   uint32               // Store current node ID
 	isMaster bool                 // Specify whether current node is master
@@ -33,23 +29,26 @@ type ydbServer struct {
 	indexDB  *bbolt.DB
 }
 
+type serverMeta struct {
+	tableNames []string
+}
+
 type tableMeta struct {
-	tableName       string            // Table name
-	columnsFamilies map[string]string // Column family
-	memTableLimit   int               // Max limit rows for table in memory
-	creationTime    time.Time         // Table create time
+	tableName       string    // Table name
+	columnsFamilies []string  // Column family
+	memTableLimit   int       // Max limit rows for table in memory
+	creationTime    time.Time // Table create time
 }
 
 type ydbTable struct {
-	meta       tableMeta
-	data       map[string]ydbColumn // Row Key -> column
+	metadata   tableMeta
+	data       map[string]ydbColumn // Row Key -> column data
 	dataLocker *sync.RWMutex        // Mutex for data store
-	inOpen     bool                 // Is opened
-
+	//inOpen     bool                 // Is opened
 }
 
 type ydbColumn struct {
-	columns map[string][]string // Column family qualifier and value
+	columns map[string]string // Key is column family:qualifier, val is value
 }
 
 func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32) (YDBServer, error) {
@@ -82,20 +81,21 @@ func (ydb *ydbServer) CreateTable(args *ydbserverrpc.CreateTableArgs, reply *ydb
 	}
 
 	newTable := &ydbTable{
-		tableName:       args.TableName,
-		columnsFamilies: args.ColumnFamilies,
-		memTableLimit:   args.MemTableLimit,
-		data:            make(map[string]ydbColumn),
-		dataLocker:      new(sync.RWMutex),
-		inOpen:          false,
-		creationTime:    time.Now(),
+		data:       make(map[string]ydbColumn),
+		dataLocker: new(sync.RWMutex),
+		metadata: tableMeta{
+			tableName:       args.TableName,
+			columnsFamilies: args.ColumnFamilies,
+			memTableLimit:   args.MemTableLimit,
+			creationTime:    time.Now(),
+		},
 	}
-	ydb.tables[newTable.tableName] = newTable
+	ydb.tables[newTable.meta.tableName] = newTable
 
 	reply.Status = ydbserverrpc.OK
 	reply.TableHandle = ydbserverrpc.TableHandle{
-		TableName:      newTable.tableName,
-		ColumnFamilies: newTable.columnsFamilies,
+		TableName:      newTable.meta.tableName,
+		ColumnFamilies: newTable.meta.columnsFamilies,
 	}
 
 	return nil
@@ -175,4 +175,8 @@ func (ydb *ydbServer) MemTableLimit(args *ydbserverrpc.MemTableLimitArgs, reply 
 	fmt.Println("Mem Table Limit")
 	// TODO: update mem limit, check mem size
 	return nil
+}
+
+func (ydb *ydbServer) formatFilename(table *ydbTable) (string, string) {
+
 }
