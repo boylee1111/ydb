@@ -25,22 +25,24 @@ type TableMeta struct {
 
 type ydbTable struct {
 	metadata   TableMeta
-	data       map[string]YDBColumn // Row Key -> column data
+	data       map[string]ydbColumn // Row Key -> column data
 	dataLocker *sync.RWMutex        // Mutex for data store
 	//inOpen     bool                 // Is opened
 }
 
-type YDBColumn struct {
-	Columns map[string]string // Key is column family:qualifier, val is value
+type ydbColumn struct {
+	columns map[string]string // Key is column family:qualifier, val is value
 }
+<<<<<<< HEAD
+=======
 
-func (col *YDBColumn) merge(other YDBColumn) {
-	for key, value := range other.Columns {
-		col.Columns[key] = value
+func (col* ydbColumn) merge(other ydbColumn) {
+	for key, value := range other.columns {
+		col.columns[key] = value
 	}
 }
 
-func (col *YDBColumn) toString() string {
+func (col* ydbColumn) toString() string {
 	ret, _ := json.Marshal(col)
 	return string(ret)
 }
@@ -64,99 +66,80 @@ func lineCounter(r io.Reader) (int, error) {
 	}
 }
 
-func (table *ydbTable) filePath() string {
-	return "./" + table.metadata.TableName + ".ydb"
+func (table* ydbTable) filePath() string {
+	return "." + table.metadata.tableName + "_db"
 }
 
-func (table *ydbTable) flush(ydb *ydbServer) error {
+
+func (table* ydbTable) flush(ydb* ydbServer) error {
 	f, err := os.OpenFile(table.filePath(), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		fmt.Println("Open file error")
 		log.Fatal(err)
 		return err
 	}
-	//if err := f.Close(); err != nil {
-	//	log.Fatal(err)
-	//	return err
-	//}
+	if err := f.Close(); err != nil {
+		log.Fatal(err)
+		return err
+	}
 	countLine, err := lineCounter(bufio.NewReader(f))
-	f.Close()
-
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	f.Close();
 	db := ydb.indexDB
-	f, err = os.OpenFile(table.filePath(), os.O_APPEND|os.O_WRONLY, 0755)
+	f, err = os.OpenFile(table.filePath(), os.O_APPEND, 0755)
 	defer f.Close()
 	if err != nil {
-		fmt.Println("Open file error")
 		log.Fatal(err)
 	}
-	//if err := f.Close(); err != nil {
-	//	log.Fatal(err)
-	//}
-	//w := bufio.NewWriter(f)
+	if err := f.Close(); err != nil {
+		log.Fatal(err)
+	}
+	w := bufio.NewWriter(f)
 	// Here we append the memTable into the file:
 	// RowKey, {"a:b": "1", "c:d": "2"}
 	for key, value := range table.data {
-		db.Batch(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte(table.metadata.TableName))
-			if b == nil {
-				b, err = tx.CreateBucket([]byte(table.metadata.TableName))
-			}
+		db.Batch(func (tx* bbolt.Tx) error {
+			b := tx.Bucket([]byte(table.metadata.tableName))
 			v := b.Get([]byte(key))
 			lines := make([]int, 0)
 			if v != nil {
 				json.Unmarshal(v, &lines)
 			}
 			lines = append(lines, countLine)
-			v, err = json.Marshal(lines)
+			v,err = json.Marshal(lines)
 			if err != nil {
-				fmt.Println("Marshal error")
 				log.Fatal(err)
 				return err
 			}
 			b.Put([]byte(key), v)
 			return nil
 		})
-		line := key + "|" + value.toString()
-		if _, err := f.WriteString(line + "\n"); err != nil {
-			panic(err)
-		}
-
-		//fmt.Fprintln(w, line)
+		line := key + "," + value.toString()
+		fmt.Fprintln(w, line)
 	}
-
-	table.data = make(map[string]YDBColumn)
-	f.Sync()
-	return nil
+	return nil;
 }
 
-func (table *ydbTable) PutRow(ydb *ydbServer, rowKey string, updated map[string]string) error {
-	if _, ok := table.data[rowKey]; !ok {
-		table.data[rowKey] = YDBColumn{
-			Columns: make(map[string]string),
-		}
-	}
+
+func (table* ydbTable) PutRow(ydb* ydbServer,rowKey string, updated map[string]string) error {
 	for key, value := range updated {
-		table.data[rowKey].Columns[key] = value
+		table.data[rowKey].columns[key] = value
 	}
-	fmt.Println("update content " + rowKey)
-	if len(table.data) > table.metadata.MemTableLimit {
-		fmt.Println("Before flush")
+	if len(table.data) > table.metadata.memTableLimit {
 		table.flush(ydb)
-		fmt.Println("After flush")
 	}
 	return nil
 }
 
-func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
-	fmt.Println("Get Row " + rowKey)
+func (table *ydbTable) GetRow(ydb* ydbServer,rowKey string) string {
+	fmt.Println("Get Row")
 	// TODO: get record
-	col, ok := table.data[rowKey]
-	if !ok {
-		col = YDBColumn{
-			Columns: make(map[string]string),
-		}
+	col, ext := table.data[rowKey]
+	if ext == false {
+		return ""
 	}
-
 	// Get column from file line by line, merge them
 	db := ydb.indexDB
 	f, err := os.Open(table.filePath())
@@ -166,18 +149,15 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
-	err = db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(table.metadata.TableName))
-		if b == nil {
-			return nil
-		}
+	err = db.View(func(tx *bbolt.Tx) error{
+		b := tx.Bucket([]byte(table.metadata.tableName))
 		v := b.Get([]byte(rowKey))
 		lines := make([]int, 0)
 		sort.Ints(lines)
 		json.Unmarshal(v, &lines)
 		cnt := 0
 		for l := range lines {
-			for cnt != l {
+			for cnt != l{
 				reader.ReadString(byte('\n'))
 				cnt += 1
 			}
@@ -185,8 +165,8 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 			if err != nil {
 				return err
 			}
-			parts := strings.Split(line, "|")
-			var anotherCol YDBColumn
+			parts := strings.Split(line, ",")
+			var anotherCol ydbColumn
 			json.Unmarshal([]byte(parts[1]), &anotherCol)
 			col.merge(anotherCol)
 			cnt += 1
@@ -197,7 +177,7 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 		log.Fatal(err)
 		return ""
 	}
-	ret, err := json.Marshal(col.Columns)
+	ret, err := json.Marshal(col.columns)
 	if err != nil {
 		log.Fatal(err)
 		return ""
@@ -222,3 +202,4 @@ func (table *ydbTable) MemTableLimit(args *ydbserverrpc.MemTableLimitArgs, reply
 	// TODO: update mem limit, check mem size
 	return nil
 }
+>>>>>>> 5b8396cb600065a9bc82039d478a4649e8390297

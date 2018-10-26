@@ -16,9 +16,14 @@ func main() {
 		fmt.Println(err)
 	}
 
+	schema := make([]string, 0)
+	schema = append(schema, "Name")
+	schema = append(schema, "Address")
+
+	tableName := "abc"
 	args := &ydbserverrpc.CreateTableArgs{
 		TableName:      "abc",
-		ColumnFamilies: make([]string, 0),
+		ColumnFamilies: schema,
 	}
 	var reply ydbserverrpc.CreateTableReply
 	if err := client.Call("YDBServer.CreateTable", args, &reply); err != nil {
@@ -32,5 +37,42 @@ func main() {
 	if err := client.Call("YDBServer.OpenTable", openArgs, &openReply); err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(openReply.Status)
+
+	columns := make(map[string]string)
+	columns["Name:First Name"] = "Ivan"
+	columns["Name:Last Name"] = "Jie"
+	putRowArgs := &ydbserverrpc.PutRowArgs{
+		TableName:      tableName,
+		RowKey:         "testKey",
+		UpdatedColumns: columns,
+	}
+	var putRowReply ydbserverrpc.PutRowReply
+	if err := client.Call("YDBServer.PutRow", putRowArgs, &putRowReply); err != nil {
+		panic(err)
+	}
+	fmt.Println("Put first record")
+
+	putRowArgs.RowKey = "testKey2"
+	columns["Name:First Name"] = "Huo"
+	columns["Name:Last Name"] = "Gun"
+	if err := client.Call("YDBServer.PutRow", putRowArgs, &putRowReply); err != nil {
+		panic(err)
+	}
+	fmt.Println("Put second record")
+
+	getRowAgrs := &ydbserverrpc.GetRowArgs{
+		TableName: tableName,
+		RowKey:    "testKey",
+	}
+	var getRowReply ydbserverrpc.GetRowReply
+	if err := client.Call("YDBServer.GetRow", getRowAgrs, &getRowReply); err != nil {
+		panic(err)
+	}
+	fmt.Println(getRowReply.Row)
+
+	getRowAgrs.RowKey = "testKey2"
+	if err := client.Call("YDBServer.GetRow", getRowAgrs, &getRowReply); err != nil {
+		panic(err)
+	}
+	fmt.Println(getRowReply.Row)
 }

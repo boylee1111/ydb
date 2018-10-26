@@ -19,7 +19,7 @@ const (
 	defaultConnectionType  = "tcp"       // Default connection type for RPC
 	defaultHostname        = "localhost" // Default hostname
 	ydbServerRPCServerName = "YDBServer" // RPC name
-	defaultMemTableLimit   = 64          // Default memory table row limit
+	defaultMemTableLimit   = 1           // Default memory table row limit
 )
 
 type ydbServer struct {
@@ -113,7 +113,7 @@ func (ydb *ydbServer) OpenTable(args *ydbserverrpc.OpenTableArgs, reply *ydbserv
 	}
 
 	// TODO: read data store
-	dataStore := make(map[string]ydbColumn)
+	dataStore := make(map[string]YDBColumn)
 
 	ydb.tables[metadata.TableName] = &ydbTable{
 		metadata:   *metadata,
@@ -170,14 +170,27 @@ func (ydb *ydbServer) DestroyTable(args *ydbserverrpc.DestroyTableArgs, reply *y
 }
 
 func (ydb *ydbServer) PutRow(args *ydbserverrpc.PutRowArgs, reply *ydbserverrpc.PutRowReply) error {
-	fmt.Println("Put Row")
-	// TODO: add record, check mem size
+	if table, ok := ydb.tables[args.TableName]; ok {
+		table.PutRow(ydb, args.RowKey, args.UpdatedColumns)
+
+		reply.Status = ydbserverrpc.OK
+		return nil
+	} // TODO: add record, check mem size
+
+	reply.Status = ydbserverrpc.TableNotFound
 	return nil
 }
 
 func (ydb *ydbServer) GetRow(args *ydbserverrpc.GetRowArgs, reply *ydbserverrpc.GetRowReply) error {
-	fmt.Println("Get Row")
-	// TODO: get record
+	if table, ok := ydb.tables[args.TableName]; ok {
+		value := table.GetRow(ydb, args.RowKey)
+
+		reply.Status = ydbserverrpc.OK
+		reply.Row = value
+		return nil
+	} // TODO: add record, check mem size
+
+	reply.Status = ydbserverrpc.TableNotFound
 	return nil
 }
 
