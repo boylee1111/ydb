@@ -75,4 +75,20 @@ func main() {
 		panic(err)
 	}
 	fmt.Println(getRowReply.Row)
+
+	closeTableArgs := &ydbserverrpc.CloseTableArgs{
+		TableName: tableName,
+	}
+	var closeTableReply ydbserverrpc.CloseTableReply
+	if err := client.Call("YDBServer.CloseTable", closeTableArgs, &closeTableReply); err != nil {
+		panic(err)
+	}
+
+	destroyArgs := ydbserverrpc.DestroyTableArgs{
+		TableName: tableName,
+	}
+	var destroyReply ydbserverrpc.DestroyTableReply
+	if err := client.Call("YDBServer.DestroyTable", destroyArgs, &destroyReply); err != nil {
+		panic(err)
+	}
 }

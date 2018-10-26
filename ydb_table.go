@@ -120,7 +120,7 @@ func (table *ydbTable) flush(ydb *ydbServer) error {
 		if _, err := f.WriteString(line + "\n"); err != nil {
 			panic(err)
 		}
-
+		countLine ++
 		//fmt.Fprintln(w, line)
 	}
 
@@ -173,10 +173,10 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 		}
 		v := b.Get([]byte(rowKey))
 		lines := make([]int, 0)
-		sort.Ints(lines)
 		json.Unmarshal(v, &lines)
+		sort.Ints(lines)
 		cnt := 0
-		for l := range lines {
+		for _, l := range lines {
 			for cnt != l {
 				reader.ReadString(byte('\n'))
 				cnt += 1

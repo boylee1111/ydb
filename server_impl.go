@@ -111,8 +111,6 @@ func (ydb *ydbServer) OpenTable(args *ydbserverrpc.OpenTableArgs, reply *ydbserv
 	if err := readGob(tableMetaFilename, metadata); err != nil {
 		return err
 	}
-
-	// TODO: read data store
 	dataStore := make(map[string]YDBColumn)
 
 	ydb.tables[metadata.TableName] = &ydbTable{
@@ -137,7 +135,6 @@ func (ydb *ydbServer) CloseTable(args *ydbserverrpc.CloseTableArgs, reply *ydbse
 			return err
 		}
 		writeGob(tableMetaFilename, table.metadata)
-		// TODO: append record to persistence store
 
 		delete(ydb.tables, args.TableName)
 		return nil
@@ -165,6 +162,9 @@ func (ydb *ydbServer) DestroyTable(args *ydbserverrpc.DestroyTableArgs, reply *y
 		return err
 	}
 
+	ydb.indexDB.Update(func(tx *bbolt.Tx) error {
+		return tx.DeleteBucket([]byte(args.TableName))
+	})
 	reply.Status = ydbserverrpc.OK
 	return nil
 }
@@ -207,8 +207,33 @@ func (ydb *ydbServer) GetColumnByRow(args *ydbserverrpc.GetColumnByRowArgs, repl
 }
 
 func (ydb *ydbServer) MemTableLimit(args *ydbserverrpc.MemTableLimitArgs, reply *ydbserverrpc.MemTableLimitReply) error {
-	fmt.Println("Mem Table Limit")
-	// TODO: update mem limit, check mem size
+	tableMetaFilename, _ := formatFilename(args.TableName)
+	if table, ok := ydb.tables[args.TableName]; ok {
+		tableMeta := table.metadata
+		tableMeta.MemTableLimit = args.NewLimitRows
+
+		if err := os.Remove(tableMetaFilename); err != nil {
+			return err
+		}
+		writeGob(tableMetaFilename, table.metadata)
+
+		reply.Status = ydbserverrpc.OK
+		return nil
+	}
+	if ydb.isTableExistOnDisk(args.TableName) {
+		var tableMeta = new(TableMeta)
+		readGob(tableMetaFilename, tableMeta)
+
+		if err := os.Remove(tableMetaFilename); err != nil {
+			return err
+		}
+		writeGob(tableMetaFilename, tableMeta)
+
+		reply.Status = ydbserverrpc.OK
+		return nil
+	}
+
+	reply.Status = ydbserverrpc.TableNotFound
 	return nil
 }
 
