@@ -196,13 +196,29 @@ func (ydb *ydbServer) GetRow(args *ydbserverrpc.GetRowArgs, reply *ydbserverrpc.
 
 func (ydb *ydbServer) GetRows(args *ydbserverrpc.GetRowsArgs, reply *ydbserverrpc.GetRowsReply) error {
 	fmt.Println("Get Rows")
-	// TODO: get records
+	if table, ok := ydb.tables[args.TableName]; ok {
+		values := table.GetRows(ydb, args.StartRowKey, args.EndRowKey)
+
+		reply.Status = ydbserverrpc.OK
+		reply.Rows = values
+		return nil
+	}
+
+	reply.Status = ydbserverrpc.TableNotFound
 	return nil
 }
 
 func (ydb *ydbServer) GetColumnByRow(args *ydbserverrpc.GetColumnByRowArgs, reply *ydbserverrpc.GetColumnByRowReply) error {
 	fmt.Println("Get Column By Row")
-	// TODO: get records
+	if table, ok := ydb.tables[args.TableName]; ok {
+		value := table.GetColumnByRow(ydb, args.RowKey, args.QualifiedColumnKey)
+
+		reply.Status = ydbserverrpc.OK
+		reply.Value = value
+		return nil
+	}
+
+	reply.Status = ydbserverrpc.TableNotFound
 	return nil
 }
 

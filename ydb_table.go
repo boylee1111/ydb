@@ -146,7 +146,6 @@ func (table *ydbTable) PutRow(ydb *ydbServer, rowKey string, updated map[string]
 	return nil
 }
 
-
 func (table *ydbTable) GetRowHelper(ydb *ydbServer, rowKey string) YDBColumn {
 	fmt.Println("Get Row " + rowKey)
 	// TODO: get record
@@ -206,12 +205,10 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 	return string(ret)
 }
 
-
-
-func (table *ydbTable) GetRows(ydb *ydbServer, startRowKey string, endRowKey string) string {
+func (table *ydbTable) GetRows(ydb *ydbServer, startRowKey string, endRowKey string) map[string]string {
 	fmt.Println("Get Rows")
 	// TODO: get records
-	cols := make([]YDBColumn, 0)
+	values := make(map[string]string)
 	db := ydb.indexDB
 	db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(table.metadata.TableName))
@@ -226,19 +223,16 @@ func (table *ydbTable) GetRows(ydb *ydbServer, startRowKey string, endRowKey str
 		max := []byte(endRowKey)
 		for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
 			col := table.GetRowHelper(ydb, string(k))
-			cols = append(cols, col)
+			val, _ := json.Marshal(col.Columns)
+			values[string(k)] = string(val)
+			//cols = append(cols, col)
 		}
 		return nil
 	})
-	ret, err := json.Marshal(cols)
-	if err != nil {
-		log.Fatal(err)
-		return ""
-	}
-	return string(ret)
+	return values
 }
 
-func (table *ydbTable) GetColumnByRow(ydb *ydbServer, rowKey string, cf string) string{
+func (table *ydbTable) GetColumnByRow(ydb *ydbServer, rowKey string, cf string) string {
 	fmt.Println("Get ColumnBy Row: " + rowKey)
 	col := table.GetRowHelper(ydb, rowKey)
 	if value, ok := col.Columns[cf]; ok {
@@ -246,4 +240,3 @@ func (table *ydbTable) GetColumnByRow(ydb *ydbServer, rowKey string, cf string) 
 	}
 	return ""
 }
-

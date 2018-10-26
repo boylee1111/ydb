@@ -76,6 +76,28 @@ func main() {
 	}
 	fmt.Println(getRowReply.Row)
 
+	getRowsArgs := &ydbserverrpc.GetRowsArgs{
+		TableName:   tableName,
+		StartRowKey: "testKey",
+		EndRowKey:   "testKey2",
+	}
+	var getRowsReply ydbserverrpc.GetRowsReply
+	if err := client.Call("YDBServer.GetRows", getRowsArgs, &getRowsReply); err != nil {
+		panic(err)
+	}
+	fmt.Println(getRowsReply.Rows)
+
+	getColumnByRowArgs := &ydbserverrpc.GetColumnByRowArgs{
+		TableName:          tableName,
+		RowKey:             "testKey",
+		QualifiedColumnKey: "Name:Last Name",
+	}
+	var getColumnByRowReply ydbserverrpc.GetColumnByRowReply
+	if err := client.Call("YDBServer.GetColumnByRow", getColumnByRowArgs, &getColumnByRowReply); err != nil {
+		panic(err)
+	}
+	fmt.Println(getColumnByRowReply.Value)
+
 	closeTableArgs := &ydbserverrpc.CloseTableArgs{
 		TableName: tableName,
 	}

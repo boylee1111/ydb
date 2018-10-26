@@ -90,7 +90,7 @@ type GetRowsReply struct {
 type GetColumnByRowArgs struct {
 	TableName          string
 	RowKey             string
-	QualifiedColumnKey string
+	QualifiedColumnKey string // Column family:qualifier
 }
 
 type GetColumnByRowReply struct {
