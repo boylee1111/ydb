@@ -1,5 +1,7 @@
 package ydbserverrpc
 
+import "time"
+
 // Status represents the status of a RPC's reply.
 type Status int
 
@@ -15,12 +17,13 @@ const (
 type TableHandle struct {
 	TableName      string
 	ColumnFamilies []string
+	MemTableLimit  int
+	CreationTime   time.Time
 }
 
 type CreateTableArgs struct {
 	TableName      string
 	ColumnFamilies []string
-	MemTableLimit  int
 }
 
 type CreateTableReply struct {

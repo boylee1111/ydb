@@ -16,9 +16,21 @@ func main() {
 		fmt.Println(err)
 	}
 
-	args := &ydbserverrpc.CreateTableArgs{TableName: "abc table"}
+	args := &ydbserverrpc.CreateTableArgs{
+		TableName:      "abc",
+		ColumnFamilies: make([]string, 0),
+	}
 	var reply ydbserverrpc.CreateTableReply
 	if err := client.Call("YDBServer.CreateTable", args, &reply); err != nil {
+		panic(err)
+	}
+
+	openArgs := &ydbserverrpc.OpenTableArgs{
+		TableName: "abc",
+	}
+	var openReply ydbserverrpc.OpenTableReply
+	if err := client.Call("YDBServer.OpenTable", openArgs, &openReply); err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println(openReply.Status)
 }

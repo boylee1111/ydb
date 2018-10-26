@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-type tableMeta struct {
-	tableName       string    // Table name
-	columnsFamilies []string  // Column family
-	memTableLimit   int       // Max limit rows for table in memory
-	creationTime    time.Time // Table create time
+type TableMeta struct {
+	TableName       string    // Table name
+	ColumnsFamilies []string  // Column family
+	MemTableLimit   int       // Max limit rows for table in memory
+	CreationTime    time.Time // Table create time
 }
 
 type ydbTable struct {
-	metadata   tableMeta
+	metadata   TableMeta
 	data       map[string]ydbColumn // Row Key -> column data
 	dataLocker *sync.RWMutex        // Mutex for data store
 	//inOpen     bool                 // Is opened
@@ -22,4 +22,3 @@ type ydbTable struct {
 type ydbColumn struct {
 	columns map[string]string // Key is column family:qualifier, val is value
 }
-

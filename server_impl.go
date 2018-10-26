@@ -1,10 +1,12 @@
 package ydb
 
 import (
+	"encoding/gob"
 	"fmt"
 	"net"
 	"net/http"
 	"net/rpc"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -17,6 +19,7 @@ const (
 	defaultConnectionType  = "tcp"       // Default connection type for RPC
 	defaultHostname        = "localhost" // Default hostname
 	ydbServerRPCServerName = "YDBServer" // RPC name
+	defaultMemTableLimit   = 64          // Default memory table row limit
 )
 
 type ydbServer struct {
@@ -59,56 +62,84 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 }
 
 func (ydb *ydbServer) CreateTable(args *ydbserverrpc.CreateTableArgs, reply *ydbserverrpc.CreateTableReply) error {
-	if _, ok := ydb.tables[args.TableName]; !ok {
+	// Check existence of given table name
+	if _, ok := ydb.tables[args.TableName]; ok {
 		reply.Status = ydbserverrpc.TableExist
 		return nil
 	}
-
-	newTable := &ydbTable{
-		data:       make(map[string]ydbColumn),
-		dataLocker: new(sync.RWMutex),
-		metadata: tableMeta{
-			tableName:       args.TableName,
-			columnsFamilies: args.ColumnFamilies,
-			memTableLimit:   args.MemTableLimit,
-			creationTime:    time.Now(),
-		},
+	if ydb.isTableExistOnDisk(args.TableName) {
+		reply.Status = ydbserverrpc.TableExist;
+		return nil
 	}
-	ydb.tables[newTable.metadata.tableName] = newTable
+
+	// Create and serialize metadata to file
+	tableMetaFilename, tableDataFilename := formatFilename(args.TableName)
+	metadata := TableMeta{
+		TableName:       args.TableName,
+		ColumnsFamilies: args.ColumnFamilies,
+		MemTableLimit:   defaultMemTableLimit,
+		CreationTime:    time.Now(),
+	}
+	if err := writeGob(tableMetaFilename, metadata); err != nil {
+		return err
+	}
+
+	os.Create(tableDataFilename)
 
 	reply.Status = ydbserverrpc.OK
 	reply.TableHandle = ydbserverrpc.TableHandle{
-		TableName:      newTable.metadata.tableName,
-		ColumnFamilies: newTable.metadata.columnsFamilies,
+		TableName:      metadata.TableName,
+		ColumnFamilies: metadata.ColumnsFamilies,
 	}
 
 	return nil
 }
 
 func (ydb *ydbServer) OpenTable(args *ydbserverrpc.OpenTableArgs, reply *ydbserverrpc.OpenTableReply) error {
-	if table, ok := ydb.tables[args.TableName]; ok {
-		if table.inOpen {
-			reply.Status = ydbserverrpc.TableOpenByOther
-			return nil
-		} else {
-			table.inOpen = true
-			reply.Status = ydbserverrpc.OK
-			reply.TableHandle = ydbserverrpc.TableHandle{
-				TableName:      table.tableName,
-				ColumnFamilies: table.columnsFamilies,
-			}
-			return nil
-		}
+	if _, ok := ydb.tables[args.TableName]; ok {
+		reply.Status = ydbserverrpc.TableOpenByOther
+		return nil
+	}
+	if !ydb.isTableExistOnDisk(args.TableName) {
+		reply.Status = ydbserverrpc.TableNotFound
+		return nil
 	}
 
-	reply.Status = ydbserverrpc.TableNotFound
+	tableMetaFilename, _ := formatFilename(args.TableName)
+	// Recovery metadata
+	var metadata = new(TableMeta)
+	if err := readGob(tableMetaFilename, metadata); err != nil {
+		return err
+	}
+
+	// TODO: read data store
+	dataStore := make(map[string]ydbColumn)
+
+	ydb.tables[metadata.TableName] = &ydbTable{
+		metadata:   *metadata,
+		data:       dataStore,
+		dataLocker: new(sync.RWMutex),
+	}
+	reply.Status = ydbserverrpc.OK
+	reply.TableHandle = ydbserverrpc.TableHandle{
+		TableName:      metadata.TableName,
+		ColumnFamilies: metadata.ColumnsFamilies,
+		MemTableLimit:  metadata.MemTableLimit,
+		CreationTime:   metadata.CreationTime,
+	}
 	return nil
 }
 
 func (ydb *ydbServer) CloseTable(args *ydbserverrpc.CloseTableArgs, reply *ydbserverrpc.CloseTableReply) error {
+	tableMetaFilename, _ := formatFilename(args.TableName)
 	if table, ok := ydb.tables[args.TableName]; ok {
-		table.inOpen = false
-		reply.Status = ydbserverrpc.OK
+		if err := os.Remove(tableMetaFilename); err != nil {
+			return err
+		}
+		writeGob(tableMetaFilename, table.metadata)
+		// TODO: append record to persistence store
+
+		delete(ydb.tables, args.TableName)
 		return nil
 	}
 
@@ -117,17 +148,24 @@ func (ydb *ydbServer) CloseTable(args *ydbserverrpc.CloseTableArgs, reply *ydbse
 }
 
 func (ydb *ydbServer) DestroyTable(args *ydbserverrpc.DestroyTableArgs, reply *ydbserverrpc.DestroyTableReply) error {
-	if table, ok := ydb.tables[args.TableName]; ok {
-		if table.inOpen {
-			reply.Status = ydbserverrpc.TableOpenByOther
-		} else {
-			delete(ydb.tables, table.tableName)
-			reply.Status = ydbserverrpc.OK
-			return nil
-		}
+	if _, ok := ydb.tables[args.TableName]; ok {
+		reply.Status = ydbserverrpc.TableOpenByOther
+		return nil
+	}
+	if !ydb.isTableExistOnDisk(args.TableName) {
+		reply.Status = ydbserverrpc.TableNotFound
+		return nil
 	}
 
-	reply.Status = ydbserverrpc.TableNotFound
+	tableMetaFilename, tableDataFilename := formatFilename(args.TableName)
+	if err := os.Remove(tableMetaFilename); err != nil {
+		return err
+	}
+	if err := os.Remove(tableDataFilename); err != nil {
+		return err
+	}
+
+	reply.Status = ydbserverrpc.OK
 	return nil
 }
 
@@ -161,6 +199,37 @@ func (ydb *ydbServer) MemTableLimit(args *ydbserverrpc.MemTableLimitArgs, reply 
 	return nil
 }
 
-func (ydb *ydbServer) formatFilename(table *ydbTable) (string, string) {
+func formatFilename(tableName string) (string, string) {
+	return "./" + tableName + ".meta", "./" + tableName + ".ydb"
+}
 
+func (ydb *ydbServer) isTableExistOnDisk(tableName string) bool {
+	tableMetaFilename, tableDataFilename := formatFilename(tableName)
+	if _, err := os.Stat(tableMetaFilename); os.IsNotExist(err) {
+		return false
+	}
+	if _, err := os.Stat(tableDataFilename); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func writeGob(filePath string, object interface{}) error {
+	file, err := os.Create(filePath)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+func readGob(filePath string, object interface{}) error {
+	file, err := os.Open(filePath)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
 }
