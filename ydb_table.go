@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/boylee1111/ydb/ydbserverrpc"
 	"go.etcd.io/bbolt"
 	"io"
 	"log"
@@ -147,7 +146,8 @@ func (table *ydbTable) PutRow(ydb *ydbServer, rowKey string, updated map[string]
 	return nil
 }
 
-func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
+
+func (table *ydbTable) GetRowHelper(ydb *ydbServer, rowKey string) YDBColumn {
 	fmt.Println("Get Row " + rowKey)
 	// TODO: get record
 	col, ok := table.data[rowKey]
@@ -162,7 +162,7 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 	f, err := os.Open(table.filePath())
 	if err != nil {
 		log.Fatal(err)
-		return ""
+		return col
 	}
 	defer f.Close()
 	reader := bufio.NewReader(f)
@@ -193,10 +193,11 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 		}
 		return nil
 	})
-	if err != nil {
-		log.Fatal(err)
-		return ""
-	}
+	return col
+}
+
+func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
+	col := table.GetRowHelper(ydb, rowKey)
 	ret, err := json.Marshal(col.Columns)
 	if err != nil {
 		log.Fatal(err)
@@ -205,20 +206,44 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 	return string(ret)
 }
 
-func (table *ydbTable) GetRows(args *ydbserverrpc.GetRowsArgs, reply *ydbserverrpc.GetRowsReply) error {
+
+
+func (table *ydbTable) GetRows(ydb *ydbServer, startRowKey string, endRowKey string) string {
 	fmt.Println("Get Rows")
 	// TODO: get records
-	return nil
+	cols := make([]YDBColumn, 0)
+	db := ydb.indexDB
+	db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(table.metadata.TableName))
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		if c == nil {
+			return nil
+		}
+		min := []byte(startRowKey)
+		max := []byte(endRowKey)
+		for k, _ := c.Seek(min); k != nil && bytes.Compare(k, max) <= 0; k, _ = c.Next() {
+			col := table.GetRowHelper(ydb, string(k))
+			cols = append(cols, col)
+		}
+		return nil
+	})
+	ret, err := json.Marshal(cols)
+	if err != nil {
+		log.Fatal(err)
+		return ""
+	}
+	return string(ret)
 }
 
-func (table *ydbTable) GetColumnByRow(args *ydbserverrpc.GetColumnByRowArgs, reply *ydbserverrpc.GetColumnByRowReply) error {
-	fmt.Println("Get Column By Row")
-	// TODO: get records
-	return nil
+func (table *ydbTable) GetColumnByRow(ydb *ydbServer, rowKey string, cf string) string{
+	fmt.Println("Get ColumnBy Row: " + rowKey)
+	col := table.GetRowHelper(ydb, rowKey)
+	if value, ok := col.Columns[cf]; ok {
+		return value
+	}
+	return ""
 }
 
-func (table *ydbTable) MemTableLimit(args *ydbserverrpc.MemTableLimitArgs, reply *ydbserverrpc.MemTableLimitReply) error {
-	fmt.Println("Mem Table Limit")
-	// TODO: update mem limit, check mem size
-	return nil
-}
