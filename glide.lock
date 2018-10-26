@@ -1,6 +1,12 @@
-hash: f3d1a7273c41bb312617079de069d03e2a6d7daaf6b376dcb291c6ebf429133d
-updated: 2018-10-23T21:16:22.708581-07:00
+hash: 19acaf5ead2ef671cc4688565b1c9f1a90991bb0bb76bcafa5cf68d20d7369e8
+updated: 2018-10-25T22:41:20.527478-07:00
 imports:
+- name: github.com/phayes/freeport
+  version: b8543db493a5ed890c5499e935e2cad7504f3a04
 - name: go.etcd.io/bbolt
   version: 7ee3ded59d4835e10f3e7d0f7603c42aa5e83820
+- name: golang.org/x/sys
+  version: d989b31c87461dc8ab2f1cac6792814e27fadea9
+  subpackages:
+  - unix
 testImports: []

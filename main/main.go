@@ -22,7 +22,7 @@ func main() {
 
 	tableName := "abc"
 	args := &ydbserverrpc.CreateTableArgs{
-		TableName:      "abc",
+		TableName:      tableName,
 		ColumnFamilies: schema,
 	}
 	var reply ydbserverrpc.CreateTableReply
@@ -31,7 +31,7 @@ func main() {
 	}
 
 	openArgs := &ydbserverrpc.OpenTableArgs{
-		TableName: "abc",
+		TableName: tableName,
 	}
 	var openReply ydbserverrpc.OpenTableReply
 	if err := client.Call("YDBServer.OpenTable", openArgs, &openReply); err != nil {

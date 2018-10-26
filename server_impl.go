@@ -19,7 +19,7 @@ const (
 	defaultConnectionType  = "tcp"       // Default connection type for RPC
 	defaultHostname        = "localhost" // Default hostname
 	ydbServerRPCServerName = "YDBServer" // RPC name
-	defaultMemTableLimit   = 1           // Default memory table row limit
+	defaultMemTableLimit   = 9000        // Default memory table row limit
 )
 
 type ydbServer struct {
@@ -195,7 +195,6 @@ func (ydb *ydbServer) GetRow(args *ydbserverrpc.GetRowArgs, reply *ydbserverrpc.
 }
 
 func (ydb *ydbServer) GetRows(args *ydbserverrpc.GetRowsArgs, reply *ydbserverrpc.GetRowsReply) error {
-	fmt.Println("Get Rows")
 	if table, ok := ydb.tables[args.TableName]; ok {
 		values := table.GetRows(ydb, args.StartRowKey, args.EndRowKey)
 
@@ -209,7 +208,6 @@ func (ydb *ydbServer) GetRows(args *ydbserverrpc.GetRowsArgs, reply *ydbserverrp
 }
 
 func (ydb *ydbServer) GetColumnByRow(args *ydbserverrpc.GetColumnByRowArgs, reply *ydbserverrpc.GetColumnByRowReply) error {
-	fmt.Println("Get Column By Row")
 	if table, ok := ydb.tables[args.TableName]; ok {
 		value := table.GetColumnByRow(ydb, args.RowKey, args.QualifiedColumnKey)
 

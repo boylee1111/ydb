@@ -137,17 +137,13 @@ func (table *ydbTable) PutRow(ydb *ydbServer, rowKey string, updated map[string]
 	for key, value := range updated {
 		table.data[rowKey].Columns[key] = value
 	}
-	fmt.Println("update content " + rowKey)
 	if len(table.data) > table.metadata.MemTableLimit {
-		fmt.Println("Before flush")
 		table.flush(ydb)
-		fmt.Println("After flush")
 	}
 	return nil
 }
 
 func (table *ydbTable) GetRowHelper(ydb *ydbServer, rowKey string) YDBColumn {
-	fmt.Println("Get Row " + rowKey)
 	// TODO: get record
 	col, ok := table.data[rowKey]
 	if !ok {
@@ -206,8 +202,6 @@ func (table *ydbTable) GetRow(ydb *ydbServer, rowKey string) string {
 }
 
 func (table *ydbTable) GetRows(ydb *ydbServer, startRowKey string, endRowKey string) map[string]string {
-	fmt.Println("Get Rows")
-	// TODO: get records
 	values := make(map[string]string)
 	db := ydb.indexDB
 	db.View(func(tx *bbolt.Tx) error {
@@ -233,7 +227,6 @@ func (table *ydbTable) GetRows(ydb *ydbServer, startRowKey string, endRowKey str
 }
 
 func (table *ydbTable) GetColumnByRow(ydb *ydbServer, rowKey string, cf string) string {
-	fmt.Println("Get ColumnBy Row: " + rowKey)
 	col := table.GetRowHelper(ydb, rowKey)
 	if value, ok := col.Columns[cf]; ok {
 		return value
