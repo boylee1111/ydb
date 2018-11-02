@@ -20,6 +20,8 @@ func main() {
 	nodeId := ydb.StoreHash(args[3])
 
 	fmt.Println("Starting server...")
+	done := make(chan bool)
 	ydb.NewYDBServer(masterHostPort, numNodes, port, nodeId)
 	fmt.Println("Server started.")
+	<-done
 }
