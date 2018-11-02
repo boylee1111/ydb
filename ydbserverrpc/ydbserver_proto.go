@@ -14,6 +14,29 @@ const (
 	NotReady                           // The servers are still getting ready.
 )
 
+type ServerNode struct {
+	HostPort string // The host:port address of the server node.
+	NodeID   uint32 // The ID identifying this server node.
+}
+
+type RegisterServerArgs struct {
+	ServerInfo ServerNode
+}
+
+type RegisterServerReply struct {
+	Status  Status
+	Servers []ServerNode
+}
+
+type GetServersArgs struct {
+	// Intentionally left empty.
+}
+
+type GetServersReply struct {
+	Status  Status
+	Servers []ServerNode
+}
+
 type TableHandle struct {
 	TableName      string
 	ColumnFamilies []string

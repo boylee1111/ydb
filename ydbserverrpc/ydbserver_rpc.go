@@ -1,6 +1,8 @@
 package ydbserverrpc
 
 type RemoteYDBServer interface {
+	RegisterServer(*RegisterServerArgs, *RegisterServerReply) error
+	GetServers(*GetServersArgs, *GetServersReply) error
 	CreateTable(*CreateTableArgs, *CreateTableReply) error
 	OpenTable(*OpenTableArgs, *OpenTableReply) error
 	CloseTable(*CloseTableArgs, *CloseTableReply) error

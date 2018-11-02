@@ -2,11 +2,13 @@ package ydb
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -22,14 +24,32 @@ const (
 	defaultMemTableLimit   = 9000        // Default memory table row limit
 )
 
+type byNodeID []ydbserverrpc.ServerNode // Definition for Server node
+
+func (s byNodeID) Len() int {
+	return len(s)
+}
+
+func (s byNodeID) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func (s byNodeID) Less(i, j int) bool {
+	return s[i].NodeID < s[j].NodeID
+}
+
 type ydbServer struct {
-	meta     serverMeta
-	tables   map[string]*ydbTable // Table name -> table
-	nodeID   uint32               // Store current node ID
-	isMaster bool                 // Specify whether current node is master
-	listener net.Listener         // Node listener
-	hostPort string               // Node host and port string
-	indexDB  *bbolt.DB
+	meta            serverMeta
+	tables          map[string]*ydbTable      // Table name -> table
+	nodeID          uint32                    // Store current node ID
+	numNodes        int                       // Number of nodes
+	isMaster        bool                      // Specify whether current node is master
+	listener        net.Listener              // Node listener
+	hostPort        string                    // Node host and port string
+	indexDB         *bbolt.DB                 // Bold db object
+	registerLocker  *sync.RWMutex             // Mutex used for registering server
+	nodes           []ydbserverrpc.ServerNode // List of all nodes (master and slaves)
+	registeredCount int                       // Current registered node
 }
 
 type serverMeta struct {
@@ -47,18 +67,110 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 	db, err := bbolt.Open("index_db", 0666, nil)
 
 	ydb := &ydbServer{
-		tables:   make(map[string]*ydbTable),
-		nodeID:   nodeID,
-		isMaster: masterServerHostPort == "",
-		listener: listener,
-		hostPort: defaultHostname + portStr,
-		indexDB:  db,
+		tables:          make(map[string]*ydbTable),
+		nodeID:          nodeID,
+		numNodes:        numNodes,
+		isMaster:        masterServerHostPort == "",
+		listener:        listener,
+		hostPort:        defaultHostname + portStr,
+		indexDB:         db,
+		registerLocker:  new(sync.RWMutex),
+		nodes:           make([]ydbserverrpc.ServerNode, numNodes),
+		registeredCount: 0,
 	}
 	rpc.RegisterName(ydbServerRPCServerName, ydbserverrpc.Wrap(ydb))
 	rpc.HandleHTTP()
 	go http.Serve(listener, nil)
 
+	// Call master to join if it's from a slave server
+	calleeHostport := masterServerHostPort
+	if ydb.isMaster {
+		calleeHostport = ydb.hostPort
+	}
+
+	// Keep dial HTTP until connected
+	var client *rpc.Client
+	for {
+		client, err = rpc.DialHTTP(defaultConnectionType, calleeHostport)
+		if err == nil {
+			defer client.Close()
+			break
+		}
+		time.Sleep(time.Duration(1) * time.Second)
+	}
+
+	for {
+		args := ydbserverrpc.RegisterServerArgs{
+			ServerInfo: ydbserverrpc.ServerNode{
+				HostPort: ydb.hostPort,
+				NodeID:   ydb.nodeID,
+			},
+		}
+		var reply ydbserverrpc.RegisterServerReply
+		err = client.Call("YDBServer.RegisterServer", args, &reply)
+		if err != nil {
+			time.Sleep(time.Duration(1) * time.Second)
+			continue
+		}
+
+		// Server will ready while receiving OK with all nodes
+		if reply.Status == ydbserverrpc.OK {
+			ydb.nodes = reply.Servers
+			ydb.numNodes = len(ydb.nodes)
+			break
+		}
+		time.Sleep(time.Duration(1) * time.Second)
+	}
+
 	return ydb, nil
+}
+
+func (ydb *ydbServer) RegisterServer(args *ydbserverrpc.RegisterServerArgs, reply *ydbserverrpc.RegisterServerReply) error {
+	if !ydb.isMaster {
+		return errors.New("Cannot register server on slave node.")
+	}
+
+	ydb.registerLocker.Lock()
+	defer ydb.registerLocker.Unlock()
+
+	// Check whether the server is registered
+	isRegistered := false
+	for _, node := range ydb.nodes {
+		if args.ServerInfo.NodeID == node.NodeID {
+			isRegistered = true
+		}
+	}
+
+	if !isRegistered {
+		ydb.nodes[ydb.registeredCount] = args.ServerInfo
+		ydb.registeredCount++
+	}
+
+	// Generate server list if all nodes ready
+	if ydb.registeredCount == ydb.numNodes {
+		sort.Sort(byNodeID(ydb.nodes))
+		reply.Status = ydbserverrpc.OK
+		reply.Servers = ydb.nodes
+	} else {
+		reply.Status = ydbserverrpc.NotReady
+	}
+
+	return nil
+}
+
+func (ydb *ydbServer) GetServers(args *ydbserverrpc.GetServersArgs, reply *ydbserverrpc.GetServersReply) error {
+	ydb.registerLocker.Lock()
+	defer ydb.registerLocker.Unlock()
+
+	if ydb.numNodes != len(ydb.nodes) {
+		reply.Status = ydbserverrpc.NotReady
+	} else {
+		sort.Sort(byNodeID(ydb.nodes))
+		reply.Status = ydbserverrpc.OK
+		reply.Servers = ydb.nodes
+	}
+
+	return nil
 }
 
 func (ydb *ydbServer) CreateTable(args *ydbserverrpc.CreateTableArgs, reply *ydbserverrpc.CreateTableReply) error {

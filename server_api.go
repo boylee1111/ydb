@@ -3,6 +3,8 @@ package ydb
 import "github.com/boylee1111/ydb/ydbserverrpc"
 
 type YDBServer interface {
+	RegisterServer(*ydbserverrpc.RegisterServerArgs, *ydbserverrpc.RegisterServerReply) error
+	GetServers(*ydbserverrpc.GetServersArgs, *ydbserverrpc.GetServersReply) error
 	CreateTable(*ydbserverrpc.CreateTableArgs, *ydbserverrpc.CreateTableReply) error
 	OpenTable(*ydbserverrpc.OpenTableArgs, *ydbserverrpc.OpenTableReply) error
 	CloseTable(*ydbserverrpc.CloseTableArgs, *ydbserverrpc.CloseTableReply) error
