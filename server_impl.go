@@ -239,6 +239,8 @@ func (ydb *ydbServer) OpenTable(args *ydbserverrpc.OpenTableArgs, reply *ydbserv
 		data:       dataStore,
 		dataLocker: new(sync.RWMutex),
 	}
+	table := ydb.tables[metadata.TableName]
+	table.recover()
 	reply.Status = ydbserverrpc.OK
 	reply.TableHandle = ydbserverrpc.TableHandle{
 		TableName:      metadata.TableName,
@@ -274,12 +276,16 @@ func (ydb *ydbServer) DestroyTable(args *ydbserverrpc.DestroyTableArgs, reply *y
 		reply.Status = ydbserverrpc.TableNotFound
 		return nil
 	}
-
 	tableMetaFilename, tableDataFilename := formatFilename(args.TableName)
 	if err := os.Remove(tableMetaFilename); err != nil {
 		return err
 	}
 	if err := os.Remove(tableDataFilename); err != nil {
+		return err
+	}
+	tableWAL := tableWALName(args.TableName)
+
+	if err := os.Remove(tableWAL); err != nil {
 		return err
 	}
 
@@ -370,6 +376,10 @@ func (ydb *ydbServer) MemTableLimit(args *ydbserverrpc.MemTableLimitArgs, reply 
 
 	reply.Status = ydbserverrpc.TableNotFound
 	return nil
+}
+
+func tableWALName(tableName string) string {
+	return "./" + tableName + ".wal"
 }
 
 func formatFilename(tableName string) (string, string) {

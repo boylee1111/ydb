@@ -67,6 +67,51 @@ func (table *ydbTable) filePath() string {
 	return "./" + table.metadata.TableName + ".ydb"
 }
 
+func (table *ydbTable) walPath() string {
+	return "./" + table.metadata.TableName + ".wal"
+}
+
+func (table *ydbTable) recover() error{
+	f, err := os.OpenFile(table.walPath(), os.O_RDONLY, 0755)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+	reader := bufio.NewReader(f)
+
+	table.data = make(map[string]YDBColumn)
+
+	for {
+		line, err := reader.ReadString(byte('\n'))
+		if err == nil || err != io.EOF {
+			parts := strings.Split(line, "|")
+			if len(parts) == 1 {
+				table.data = make(map[string]YDBColumn)
+			} else {
+				rowKey := parts[0]
+				key := parts[1]
+				value := parts[2]
+				value = strings.Trim(value, "\n")
+				if _, ok := table.data[rowKey]; !ok {
+					table.data[rowKey] = YDBColumn{
+						Columns:make(map[string]string),
+					}
+				}
+				table.data[rowKey].Columns[key] = value
+			}
+
+			if err == io.EOF {
+				return nil
+			}
+		} else {
+			return err
+		}
+	}
+
+
+}
+
 func (table *ydbTable) flush(ydb *ydbServer) error {
 	f, err := os.OpenFile(table.filePath(), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
@@ -123,6 +168,16 @@ func (table *ydbTable) flush(ydb *ydbServer) error {
 		//fmt.Fprintln(w, line)
 	}
 
+	if wal, err := os.OpenFile(table.walPath(), os.O_APPEND | os.O_CREATE | os.O_WRONLY, 0666); err == nil {
+		defer wal.Close()
+		if _, err = wal.WriteString("cp\n"); err != nil {
+			panic(err)
+		}
+		if err = wal.Sync(); err != nil {
+			panic(err)
+		}
+	}
+
 	table.data = make(map[string]YDBColumn)
 	f.Sync()
 	return nil
@@ -134,6 +189,20 @@ func (table *ydbTable) PutRow(ydb *ydbServer, rowKey string, updated map[string]
 			Columns: make(map[string]string),
 		}
 	}
+
+	if wal, err := os.OpenFile(table.walPath(), os.O_APPEND | os.O_CREATE | os.O_WRONLY, 0666); err == nil {
+		defer wal.Close()
+		for key, value := range updated {
+			if _, err := wal.WriteString(rowKey + "|" + key + "|" + value + "\n"); err != nil {
+				panic(err)
+			}
+		}
+		if err := wal.Sync(); err != nil {
+			panic(err)
+		}
+
+	}
+
 	for key, value := range updated {
 		table.data[rowKey].Columns[key] = value
 	}
