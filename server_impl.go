@@ -58,13 +58,17 @@ type serverMeta struct {
 
 func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32) (YDBServer, error) {
 	portStr := ":" + strconv.Itoa(port)
+	fmt.Println("portStr is " + portStr)
 	listener, err := net.Listen(defaultConnectionType, portStr)
 	if err != nil {
 		fmt.Println("Failed on Listen: ", err)
 		return nil, err
 	}
 
-	db, err := bbolt.Open("index_db", 0666, nil)
+	dbName := "index_db" + fmt.Sprint(nodeID)
+	fmt.Println("Start connecting db " + dbName)
+	db, err := bbolt.Open(dbName, 0666, nil)
+	fmt.Println("DB connected.")
 
 	ydb := &ydbServer{
 		tables:          make(map[string]*ydbTable),
@@ -81,6 +85,7 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 	rpc.RegisterName(ydbServerRPCServerName, ydbserverrpc.Wrap(ydb))
 	rpc.HandleHTTP()
 	go http.Serve(listener, nil)
+	fmt.Println("Start serving...")
 
 	// Call master to join if it's from a slave server
 	calleeHostport := masterServerHostPort
@@ -91,11 +96,13 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 	// Keep dial HTTP until connected
 	var client *rpc.Client
 	for {
+		fmt.Println("callee host port is " + calleeHostport)
 		client, err = rpc.DialHTTP(defaultConnectionType, calleeHostport)
 		if err == nil {
 			defer client.Close()
 			break
 		}
+		fmt.Println(err)
 		time.Sleep(time.Duration(1) * time.Second)
 	}
 
@@ -109,6 +116,7 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 		var reply ydbserverrpc.RegisterServerReply
 		err = client.Call("YDBServer.RegisterServer", args, &reply)
 		if err != nil {
+			fmt.Println(err)
 			time.Sleep(time.Duration(1) * time.Second)
 			continue
 		}
@@ -119,6 +127,7 @@ func NewYDBServer(masterServerHostPort string, numNodes, port int, nodeID uint32
 			ydb.numNodes = len(ydb.nodes)
 			break
 		}
+		fmt.Println("Server not ready, try after 1 seconds.")
 		time.Sleep(time.Duration(1) * time.Second)
 	}
 
