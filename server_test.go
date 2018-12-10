@@ -168,6 +168,21 @@ func getRowsRecords(client *rpc.Client, N int) {
 	}
 }
 
+func getRowsRecordsReverse(client* rpc.Client, N int) {
+	for i := 0; i < N; i++ {
+		rand1, rand2 := rand.Intn(NRange), rand.Intn(NRange)
+		getRowsReverseArgs := %ydbserverrpc.GetRowsArgs {
+			TableName: tableName,
+			StartRowKey: strconv.Itoa(max(rand1, rand2)),
+			EndRowKey: strconv.Itoa(min(rand1, rand2))
+		}
+		var getRowsReverseReply ydbserverrpc.GetRowReply
+		if err:= client.Call("YDBServer.GetRows", getRowsReverseArgs, &getRowsReverseReply); err != nil {
+			panic(err)
+		}
+	}
+}
+
 func getColumnByRowRecords(client *rpc.Client, N int) {
 	for i := 0; i < N; i++ {
 		getColumnByRowArgs := &ydbserverrpc.GetColumnByRowArgs{
