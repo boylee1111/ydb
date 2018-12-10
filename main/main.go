@@ -28,6 +28,10 @@ func main() {
 	if err := client.Call("YDBServer.CreateTable", args, &reply); err != nil {
 		panic(err)
 	}
+	// Duplicate table creation
+	if err := client.Call("YDBServer.CreateTable", args, &reply); err != nil {
+		panic(err)
+	}
 
 	openArgs := &ydbserverrpc.OpenTableArgs{
 		TableName: tableName,
@@ -70,6 +74,13 @@ func main() {
 	fmt.Println(getRowReply.Row)
 
 	getRowAgrs.RowKey = "testKey2"
+	if err := client.Call("YDBServer.GetRow", getRowAgrs, &getRowReply); err != nil {
+		panic(err)
+	}
+	fmt.Println(getRowReply.Row)
+
+	// Get for non exist key
+	getRowAgrs.RowKey = "testKey_not_exist"
 	if err := client.Call("YDBServer.GetRow", getRowAgrs, &getRowReply); err != nil {
 		panic(err)
 	}

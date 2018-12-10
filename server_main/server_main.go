@@ -10,7 +10,7 @@ import (
 func main() {
 	args := os.Args[1:]
 	if len(args) < 4 {
-		fmt.Println("Run parameters number.")
+		fmt.Println("Wrong parameters number.")
 		return
 	}
 

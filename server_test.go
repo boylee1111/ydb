@@ -12,10 +12,13 @@ import (
 )
 
 const (
-	NRange    = 5000
-	N         = 10000
-	tableName = "testTable"
+	NRange       = 5000
+	N            = 10000
+	tableName    = "testTable"
+	clientNumber = 10
 )
+
+// Single client Testing
 
 func TestYdbServer_GetRow(t *testing.T) {
 	client := serverStartup()
@@ -70,6 +73,79 @@ func TestYdbServer_GetColumnByRow(t *testing.T) {
 	serverCloseAndCleanup(client)
 }
 
+// Multi clients concurrent Testing
+
+func TestYdbServer_GetRow_Multi_Clients(t *testing.T) {
+	clients := serverStartupWithClients(clientNumber)
+
+	start := time.Now()
+	for _, client := range clients {
+		go getRowRecords(client, N)
+	}
+	end := time.Now()
+	diff := end.Sub(start)
+
+	fmt.Printf("Test GetRow for %d clients with %d times, take %v.\n", len(clients), N, diff)
+
+	serverCloseAndCleanup(clients[0])
+	for _, client := range clients {
+		client.Close()
+	}
+}
+
+func TestYdbServer_PutRow_Multi_Clients(t *testing.T) {
+	clients := serverStartupWithClients(clientNumber)
+
+	start := time.Now()
+	for _, client := range clients {
+		go putRowRecords(client, N)
+	}
+	end := time.Now()
+	diff := end.Sub(start)
+
+	fmt.Printf("Test PutRow for %d clients with %d times, take %v.\n", len(clients), N, diff)
+
+	serverCloseAndCleanup(clients[0])
+	for _, client := range clients {
+		client.Close()
+	}
+}
+
+func TestYdbServer_GetRows_Multi_Clients(t *testing.T) {
+	clients := serverStartupWithClients(clientNumber)
+
+	start := time.Now()
+	for _, client := range clients {
+		go getRowsRecords(client, N)
+	}
+	end := time.Now()
+	diff := end.Sub(start)
+
+	fmt.Printf("Test GetRows for %d clients with %d times, take %v.\n", len(clients), N, diff)
+
+	serverCloseAndCleanup(clients[0])
+	for _, client := range clients {
+		client.Close()
+	}
+}
+func TestYdbServer_GetColumnByRow_Multi_Clients(t *testing.T) {
+	clients := serverStartupWithClients(clientNumber)
+
+	start := time.Now()
+	for _, client := range clients {
+		go getColumnByRowRecords(client, N)
+	}
+	end := time.Now()
+	diff := end.Sub(start)
+
+	fmt.Printf("Test GetColumnByRow for %d clients with %d times, take %v.\n", len(clients), N, diff)
+
+	serverCloseAndCleanup(clients[0])
+	for _, client := range clients {
+		client.Close()
+	}
+}
+
 func serverStartup() *rpc.Client {
 	port, err := freeport.GetFreePort()
 	if err != nil {
@@ -103,6 +179,45 @@ func serverStartup() *rpc.Client {
 	}
 
 	return client
+}
+
+func serverStartupWithClients(clientNum int) []*rpc.Client {
+	port, err := freeport.GetFreePort()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	NewYDBServer("", 1, port, 0)
+	fmt.Println("localhost:" + strconv.Itoa(port))
+
+	clients := make([]*rpc.Client, clientNum)
+	for i := 0; i < clientNum; i++ {
+		clients[i], err = rpc.DialHTTP("tcp", "localhost:"+strconv.Itoa(port))
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	schema := make([]string, 0)
+	schema = append(schema, "Name")
+	schema = append(schema, "Address")
+	createTableArgs := &ydbserverrpc.CreateTableArgs{
+		TableName:      tableName,
+		ColumnFamilies: schema,
+	}
+	var createTableReply ydbserverrpc.CreateTableReply
+	if err := clients[0].Call("YDBServer.CreateTable", createTableArgs, &createTableReply); err != nil {
+		panic(err)
+	}
+	openArgs := &ydbserverrpc.OpenTableArgs{
+		TableName: tableName,
+	}
+	var openReply ydbserverrpc.OpenTableReply
+	if err := clients[0].Call("YDBServer.OpenTable", openArgs, &openReply); err != nil {
+		fmt.Println(err)
+	}
+
+	return clients
 }
 
 func serverCloseAndCleanup(client *rpc.Client) {
@@ -168,16 +283,16 @@ func getRowsRecords(client *rpc.Client, N int) {
 	}
 }
 
-func getRowsRecordsReverse(client* rpc.Client, N int) {
+func getRowsRecordsReverse(client *rpc.Client, N int) {
 	for i := 0; i < N; i++ {
 		rand1, rand2 := rand.Intn(NRange), rand.Intn(NRange)
-		getRowsReverseArgs := %ydbserverrpc.GetRowsArgs {
-			TableName: tableName,
+		getRowsReverseArgs := &ydbserverrpc.GetRowsArgs{
+			TableName:   tableName,
 			StartRowKey: strconv.Itoa(max(rand1, rand2)),
-			EndRowKey: strconv.Itoa(min(rand1, rand2))
+			EndRowKey:   strconv.Itoa(min(rand1, rand2)),
 		}
 		var getRowsReverseReply ydbserverrpc.GetRowReply
-		if err:= client.Call("YDBServer.GetRows", getRowsReverseArgs, &getRowsReverseReply); err != nil {
+		if err := client.Call("YDBServer.GetRows", getRowsReverseArgs, &getRowsReverseReply); err != nil {
 			panic(err)
 		}
 	}
